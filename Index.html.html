@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html class="light" lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Tremblay Energy Intelligence</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d3c5ac; border-radius: 10px; }
+  .glass-card {
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(211,197,172,0.3);
+  }
+  .sparkline-container { height: 48px; width: 100%; }
+  .zebra-table tr:nth-child(even) { background-color: #f8f9ff; }
+  #map { height: 100%; min-height: 420px; z-index: 1; }
+  .leaflet-container { font-family: Inter, sans-serif; }
+
+  /* DPE badge */
+  .dpe-A { background: #009a44; color: #fff; }
+  .dpe-B { background: #4cbb6f; color: #fff; }
+  .dpe-C { background: #c6d500; color: #111; }
+  .dpe-D { background: #ffc61a; color: #111; }
+  .dpe-E { background: #f5820d; color: #fff; }
+  .dpe-F { background: #e9450a; color: #fff; }
+  .dpe-G { background: #c21807; color: #fff; }
+
+  .tab-btn { transition: all .18s; }
+  .tab-btn.active {
+    color: #795900;
+    border-bottom: 2px solid #795900;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Sidebar nav */
+  .nav-link { transition: all .18s; }
+  .nav-link.active { color: #795900; font-weight: 700; border-right: 4px solid #795900; background: #eff4ff; }
+
+  .section-panel { display: none; }
+  .section-panel.active { display: block; }
+
+  /* DPE bar gauge */
+  .dpe-bar { height: 10px; border-radius: 5px; }
+
+  /* Decret badge */
+  .decret-oui { background:#fef3c7; color:#92400e; border:1px solid #f59e0b; }
+  .decret-non { background:#f0fdf4; color:#166534; border:1px solid #4ade80; }
+
+  /* Animate KPI cards */
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+  .kpi-card { animation: fadeUp .4s ease both; }
+</style>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "surface": "#f8f9ff","surface-container-lowest":"#ffffff","surface-container-low":"#eff4ff",
+          "surface-container":"#e5eeff","surface-container-high":"#dce9ff","surface-container-highest":"#d3e4fe",
+          "on-surface":"#0b1c30","on-surface-variant":"#4f4633","outline":"#817661","outline-variant":"#d3c5ac",
+          "primary":"#795900","on-primary":"#ffffff","primary-container":"#fbbf24","on-primary-container":"#6c4f00",
+          "primary-fixed":"#ffdf9f","primary-fixed-dim":"#f9bd22",
+          "secondary":"#0058be","on-secondary":"#ffffff","secondary-container":"#2170e4","on-secondary-container":"#fefcff",
+          "tertiary":"#9d4300","on-tertiary":"#ffffff","tertiary-container":"#ffb995","on-tertiary-container":"#8d3b00",
+          "error":"#ba1a1a","on-error":"#ffffff","error-container":"#ffdad6","on-error-container":"#93000a",
+          "background":"#f8f9ff","on-background":"#0b1c30","surface-variant":"#d3e4fe",
+          "inverse-surface":"#213145","inverse-on-surface":"#eaf1ff","surface-tint":"#795900",
+        },
+        borderRadius: { "DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem" },
+        fontFamily: { "sans": ["Inter", "sans-serif"] },
+      }
+    }
+  }
+</script>
+</head>
+<body class="bg-[#f8f9ff] text-[#0b1c30] font-sans overflow-x-hidden">
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col py-4 bg-white border-r border-[#d3c5ac] z-50">
+  <div class="px-4 mb-6">
+    <h1 class="text-xl font-bold text-[#0b1c30]">Tremblay Energy</h1>
+    <p class="text-xs text-[#4f4633] opacity-70">Intelligence Municipale</p>
+  </div>
+  <nav class="flex-1 space-y-1">
+    <a class="nav-link active flex items-center px-4 py-3 cursor-pointer" onclick="showPanel('overview')">
+      <span class="material-symbols-outlined mr-3 text-xl">dashboard</span>
+      <span class="text-xs font-semibold uppercase tracking-wider">Vue d'ensemble</span>
+    </a>
+    <a class="nav-link flex items-center px-4 py-3 text-[#4f4633] cursor-pointer" onclick="showPanel('carte')">
+      <span class="material-symbols-outlined mr-3 text-xl">map</span>
+      <span class="text-xs font-semibold uppercase tracking-wider">Carte Interactive</span>
+    </a>
+    <a class="nav-link flex items-center px-4 py-3 text-[#4f4633] cursor-pointer" onclick="showPanel('decret')">
+      <span class="material-symbols-outlined mr-3 text-xl">account_balance</span>
+      <span class="text-xs font-semibold uppercase tracking-wider">Décret Tertiaire</span>
+    </a>
+    <a class="nav-link flex items-center px-4 py-3 text-[#4f4633] cursor-pointer" onclick="showPanel('ademe')">
+      <span class="material-symbols-outlined mr-3 text-xl">bar_chart</span>
+      <span class="text-xs font-semibold uppercase tracking-wider">Données ADEME</span>
+    </a>
+    <a class="nav-link flex items-center px-4 py-3 text-[#4f4633] cursor-pointer" onclick="showPanel('analytics')">
+      <span class="material-symbols-outlined mr-3 text-xl">analytics</span>
+      <span class="text-xs font-semibold uppercase tracking-wider">Analytique</span>
+    </a>
+  </nav>
+  <div class="px-4 pt-4 mt-auto">
+    <div class="flex items-center gap-3 mb-4 p-2 bg-[#d3e4fe] rounded-xl">
+      <div class="w-10 h-10 rounded-full bg-[#fbbf24] flex items-center justify-center font-bold text-[#795900]">DTE</div>
+      <div>
+        <p class="text-xs font-bold">Direction Énergie</p>
+        <p class="text-[10px] text-[#4f4633]">Tremblay-en-France</p>
+      </div>
+    </div>
+    <button class="w-full bg-[#795900] text-white text-xs font-semibold py-3 rounded hover:opacity-90 transition-all">
+      📄 Exporter Rapport
+    </button>
+  </div>
+</aside>
+
+<!-- ═══════════════════ MAIN ═══════════════════ -->
+<main class="ml-64 min-h-screen">
+
+  <!-- TopBar -->
+  <header class="flex justify-between items-center h-16 px-4 sticky top-0 z-40 bg-white border-b border-[#d3c5ac]">
+    <div class="flex items-center gap-8">
+      <h2 class="text-lg font-black">Energy Management Platform</h2>
+
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="relative">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#4f4633] text-sm">search</span>
+        <input class="pl-9 pr-4 py-2 bg-[#eff4ff] border border-[#d3c5ac] rounded-full text-sm focus:ring-2 focus:ring-[#795900] focus:outline-none w-56" placeholder="Rechercher une zone..."/>
+      </div>
+      <span class="relative material-symbols-outlined text-[#4f4633] cursor-pointer hover:text-[#795900]">
+        notifications
+        <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-[9px] text-white flex items-center justify-center font-bold">3</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- ════════════ PANEL: OVERVIEW ════════════ -->
+  <div id="panel-overview" class="section-panel active p-4 space-y-4 max-w-[1400px] mx-auto">
+
+    <!-- KPI row -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="kpi-card bg-white border border-[#d3c5ac] p-4 rounded-lg hover:shadow-md transition-all" style="animation-delay:.05s">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#4f4633] mb-1">Électricité</p>
+        <h4 class="text-2xl font-bold">1.28 GWh</h4>
+        <p class="text-xs text-[#4f4633]">/jour · <span class="text-emerald-600 font-bold">↓ 2.4%</span></p>
+        <div class="sparkline-container mt-3 relative">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" class="w-full h-full">
+            <path d="M0,45 L10,35 L20,40 L30,20 L40,25 L50,15 L60,30 L70,10 L80,20 L90,15 L100,5" fill="none" stroke="#f9bd22" stroke-width="2"/>
+          </svg>
+        </div>
+      </div>
+      <div class="kpi-card bg-white border border-[#d3c5ac] p-4 rounded-lg hover:shadow-md transition-all" style="animation-delay:.1s">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#4f4633] mb-1">Eau Potable</p>
+        <h4 class="text-2xl font-bold">4 850 m³</h4>
+        <p class="text-xs text-[#4f4633]">/jour · <span class="text-rose-600 font-bold">↑ 5.1%</span></p>
+        <div class="sparkline-container mt-3 relative">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" class="w-full h-full">
+            <path d="M0,40 L15,42 L30,35 L45,38 L60,25 L75,15 L90,10 L100,5" fill="none" stroke="#0058be" stroke-width="2"/>
+          </svg>
+        </div>
+      </div>
+      <div class="kpi-card bg-white border border-[#d3c5ac] p-4 rounded-lg hover:shadow-md transition-all" style="animation-delay:.15s">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#4f4633] mb-1">Gaz Naturel</p>
+        <h4 class="text-2xl font-bold">2.1 MWh</h4>
+        <p class="text-xs text-[#4f4633]">/jour · <span class="text-[#4f4633] font-bold">Stable</span></p>
+        <div class="sparkline-container mt-3 relative">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" class="w-full h-full">
+            <path d="M0,25 L20,28 L40,25 L60,26 L80,24 L100,25" fill="none" stroke="#9d4300" stroke-width="2"/>
+          </svg>
+        </div>
+      </div>
+      <div class="kpi-card bg-white border border-[#d3c5ac] p-4 rounded-lg hover:shadow-md transition-all" style="animation-delay:.2s">
+        <p class="text-[11px] font-semibold uppercase tracking-widest text-[#4f4633] mb-1">CO₂ Évité</p>
+        <h4 class="text-2xl font-bold">312 t</h4>
+        <p class="text-xs text-[#4f4633]">/mois · <span class="text-emerald-600 font-bold">↑ 8.2%</span></p>
+        <div class="sparkline-container mt-3 relative">
+          <svg viewBox="0 0 100 48" preserveAspectRatio="none" class="w-full h-full">
+            <path d="M0,40 L20,35 L40,30 L60,20 L80,12 L100,5" fill="none" stroke="#10b981" stroke-width="2"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chart + Alerts -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-8 bg-white border border-[#d3c5ac] p-4 rounded-lg shadow-sm">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h3 class="text-base font-semibold">Synthèse Énergétique Municipale</h3>
+            <p class="text-xs text-[#4f4633]">Production locale vs Consommation — 12 derniers mois · Source ADEME</p>
+          </div>
+          <div class="flex bg-[#e5eeff] p-1 rounded-lg gap-1">
+            <button onclick="toggleChart('reel')" id="btn-reel" class="px-3 py-1.5 bg-white shadow-sm rounded text-xs font-medium">Réel</button>
+            <button onclick="toggleChart('prev')" id="btn-prev" class="px-3 py-1.5 text-xs text-[#4f4633]">Prévisionnel</button>
+          </div>
+        </div>
+        <canvas id="mainChart" height="120"></canvas>
+        <div class="flex gap-6 mt-3 justify-center">
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#f9bd22]"></span><span class="text-[11px] font-semibold">Production (kWh/hab)</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#0058be]"></span><span class="text-[11px] font-semibold">Consommation (kWh/hab)</span></div>
+          <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#10b981]"></span><span class="text-[11px] font-semibold">Objectif ADEME 2030</span></div>
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div class="lg:col-span-4 bg-white border border-[#d3c5ac] p-4 rounded-lg">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-[#4f4633] flex items-center gap-2 mb-4">
+          <span class="material-symbols-outlined text-sm">warning</span> Alertes Actives (3)
+        </h3>
+        <div class="space-y-3">
+          <div class="p-3 bg-red-50 border-l-4 border-red-600 rounded-r flex items-start gap-3">
+            <span class="material-symbols-outlined text-red-600 text-lg">priority_high</span>
+            <div>
+              <p class="text-xs font-bold text-red-600">Surconsommation — Secteur Industriel A</p>
+              <p class="text-[11px] text-red-500">Pic +15% vs prévisions ADEME</p>
+            </div>
+          </div>
+          <div class="p-3 bg-[#e5eeff] border-l-4 border-[#795900] rounded-r flex items-start gap-3">
+            <span class="material-symbols-outlined text-[#795900] text-lg">engineering</span>
+            <div>
+              <p class="text-xs font-bold">Maintenance Transformateur 42</p>
+              <p class="text-[11px] text-[#4f4633]">Prévue à 14:00 — Quartier Vert</p>
+            </div>
+          </div>
+          <div class="p-3 bg-[#e5eeff] border-l-4 border-[#0058be] rounded-r flex items-start gap-3">
+            <span class="material-symbols-outlined text-[#0058be] text-lg">water_drop</span>
+            <div>
+              <p class="text-xs font-bold">Niveau Eau de Pluie : Optimal</p>
+              <p class="text-[11px] text-[#4f4633]">Réserves locales à 92%</p>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded text-xs">
+          <p class="font-bold text-amber-800">📋 Décret Tertiaire</p>
+          <p class="text-amber-700 mt-1">4 bâtiments doivent déposer leur bilan avant le 30/09/2025</p>
+          <button onclick="showPanel('decret')" class="mt-2 text-[#795900] underline text-[11px] font-semibold">Voir l'onglet →</button>
+        </div>
+        <button class="w-full mt-4 py-2 border border-[#d3c5ac] text-xs font-semibold rounded hover:bg-[#e5eeff] transition-colors">
+          Voir tout l'historique
+        </button>
+      </div>
+    </section>
+
+    <!-- Secteurs table -->
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+      <div class="xl:col-span-2 bg-white border border-[#d3c5ac] rounded-lg overflow-hidden shadow-sm">
+        <div class="p-3 border-b border-[#d3c5ac] bg-[#e5eeff] flex justify-between items-center">
+          <h3 class="text-xs font-bold uppercase tracking-wider">Détail par Secteur</h3>
+          <button onclick="showPanel('carte')" class="text-[11px] text-[#795900] font-semibold underline">Voir sur la carte →</button>
+        </div>
+        <div class="overflow-auto">
+          <table class="w-full text-left zebra-table border-collapse text-xs">
+            <thead class="bg-[#eff4ff] border-b border-[#d3c5ac]">
+              <tr>
+                <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Secteur</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Type</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Conso élec.</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">vs N-1</th>
+                <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="hover:bg-[#fff8e1] transition-colors">
+                <td class="p-3 font-medium">Tremblay Nord</td>
+                <td class="p-3">Industriel</td>
+                <td class="p-3 font-mono font-semibold">348 MWh</td>
+                <td class="p-3 text-rose-600 font-bold">+15%</td>
+                <td class="p-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-rose-600"></span>Critique</td>
+              </tr>
+              <tr class="hover:bg-[#fff8e1] transition-colors">
+                <td class="p-3 font-medium">Vieux-Pays</td>
+                <td class="p-3">Résidentiel</td>
+                <td class="p-3 font-mono font-semibold">92 MWh</td>
+                <td class="p-3 text-emerald-600 font-bold">-3%</td>
+                <td class="p-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Normal</td>
+              </tr>
+              <tr class="hover:bg-[#fff8e1] transition-colors">
+                <td class="p-3 font-medium">Aéroport (P)</td>
+                <td class="p-3">Logistique</td>
+                <td class="p-3 font-mono font-semibold">512 MWh</td>
+                <td class="p-3 text-amber-600 font-bold">+2%</td>
+                <td class="p-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Maint.</td>
+              </tr>
+              <tr class="hover:bg-[#fff8e1] transition-colors">
+                <td class="p-3 font-medium">Les Cottages</td>
+                <td class="p-3">Résidentiel</td>
+                <td class="p-3 font-mono font-semibold">78 MWh</td>
+                <td class="p-3 text-emerald-600 font-bold">-5%</td>
+                <td class="p-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Normal</td>
+              </tr>
+              <tr class="hover:bg-[#fff8e1] transition-colors">
+                <td class="p-3 font-medium">Centre Ville</td>
+                <td class="p-3">Tertiaire</td>
+                <td class="p-3 font-mono font-semibold">145 MWh</td>
+                <td class="p-3 text-[#4f4633] font-bold">+0.5%</td>
+                <td class="p-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Normal</td>
+              </tr>
+              <tr class="hover:bg-[#fff8e1] transition-colors">
+                <td class="p-3 font-medium">Parc des Expo</td>
+                <td class="p-3">Tertiaire</td>
+                <td class="p-3 font-mono font-semibold">220 MWh</td>
+                <td class="p-3 text-amber-600 font-bold">+8%</td>
+                <td class="p-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Veille</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Source info -->
+      <div class="bg-white border border-[#d3c5ac] rounded-lg p-4">
+        <h3 class="text-xs font-bold uppercase tracking-wider mb-3 text-[#4f4633]">Sources de données</h3>
+        <div class="space-y-3">
+          <div class="flex items-start gap-3 p-3 bg-[#eff4ff] rounded">
+            <span class="text-lg">🏛️</span>
+            <div>
+              <p class="text-xs font-bold">ADEME — Open Data</p>
+              <p class="text-[11px] text-[#4f4633]">Consommations par commune (SDES), DPE logements, mix énergétique local</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-[#eff4ff] rounded">
+            <span class="text-lg">📊</span>
+            <div>
+              <p class="text-xs font-bold">SDES 2023</p>
+              <p class="text-[11px] text-[#4f4633]">Bilan énergétique régional Île-de-France, intensité électrique</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-[#eff4ff] rounded">
+            <span class="text-lg">🌱</span>
+            <div>
+              <p class="text-xs font-bold">OPERAT (ADEME)</p>
+              <p class="text-[11px] text-[#4f4633]">Plateforme Décret Tertiaire — déclarations bâtiments > 1 000 m²</p>
+            </div>
+          </div>
+          <div class="flex items-start gap-3 p-3 bg-[#eff4ff] rounded">
+            <span class="text-lg">🏠</span>
+            <div>
+              <p class="text-xs font-bold">Base DPE ADEME</p>
+              <p class="text-[11px] text-[#4f4633]">Diagnostics de Performance Énergétique — Tremblay-en-France (93290)</p>
+            </div>
+          </div>
+        </div>
+        <p class="text-[10px] text-[#4f4633] mt-4 opacity-70">Mise à jour : juin 2025 · INSEE 93073</p>
+      </div>
+    </section>
+  </div><!-- end overview -->
+
+  <!-- ════════════ PANEL: CARTE ════════════ -->
+  <div id="panel-carte" class="section-panel p-4 max-w-[1400px] mx-auto">
+    <div class="mb-4 flex justify-between items-center">
+      <div>
+        <h2 class="text-xl font-bold">Carte Interactive — Tremblay-en-France</h2>
+        <p class="text-xs text-[#4f4633]">Zones de consommation énergétique · Source OpenStreetMap + données ADEME</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="resetMap()" class="px-4 py-2 bg-white border border-[#d3c5ac] rounded text-xs font-semibold hover:bg-[#e5eeff] transition-all">🔄 Réinitialiser</button>
+        <button onclick="fitTremblay()" class="px-4 py-2 bg-[#795900] text-white rounded text-xs font-semibold hover:opacity-90 transition-all">📍 Centrer</button>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+      <div class="xl:col-span-3 bg-white border border-[#d3c5ac] rounded-lg overflow-hidden" style="height:560px">
+        <div id="map"></div>
+      </div>
+      <div class="flex flex-col gap-4">
+        <!-- Légende -->
+        <div class="bg-white border border-[#d3c5ac] rounded-lg p-4">
+          <h4 class="text-xs font-bold uppercase tracking-wider mb-3 text-[#4f4633]">Légende</h4>
+          <p class="text-[10px] font-semibold text-[#4f4633] uppercase tracking-wider mb-1">Bâtiments publics</p>
+          <p class="text-[10px] text-[#4f4633] mb-2">Marqueur grand — lettre = classe DPE</p>
+          <div class="grid grid-cols-4 gap-1 mb-3">
+            <div class="flex flex-col items-center gap-1"><span class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white" style="background:#009a44">A</span><span class="text-[9px]">A</span></div>
+            <div class="flex flex-col items-center gap-1"><span class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white" style="background:#4cbb6f">B</span><span class="text-[9px]">B</span></div>
+            <div class="flex flex-col items-center gap-1"><span class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-[#111]" style="background:#c6d500">C</span><span class="text-[9px]">C</span></div>
+            <div class="flex flex-col items-center gap-1"><span class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-[#111]" style="background:#ffc61a">D</span><span class="text-[9px]">D</span></div>
+            <div class="flex flex-col items-center gap-1"><span class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white" style="background:#f5820d">E</span><span class="text-[9px]">E</span></div>
+            <div class="flex flex-col items-center gap-1"><span class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white" style="background:#e9450a">F</span><span class="text-[9px]">F</span></div>
+            <div class="flex flex-col items-center gap-1"><span class="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black text-white" style="background:#c21807">G</span><span class="text-[9px]">G</span></div>
+          </div>
+          <p class="text-[10px] font-semibold text-[#4f4633] uppercase tracking-wider mb-1">Contour OPERAT</p>
+          <div class="space-y-1 mb-3 text-[11px]">
+            <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full border-[3px]" style="border-color:#10b981;background:#ffc61a"></span>Déclaré sur OPERAT ✅</div>
+            <div class="flex items-center gap-2"><span class="w-4 h-4 rounded-full border-[3px]" style="border-color:#dc2626;background:#ffc61a"></span>Non déclaré ❌</div>
+          </div>
+          <p class="text-[10px] font-semibold text-[#4f4633] uppercase tracking-wider mb-1">Zones sectorielles</p>
+          <div class="space-y-1 text-[11px]">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full" style="background:#dc2626"></span>Critique (&gt;300 MWh)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full" style="background:#f59e0b"></span>Veille (100-300 MWh)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full" style="background:#10b981"></span>Normal (&lt;100 MWh)</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full" style="background:#f9bd22"></span>Production EnR</div>
+          </div>
+        </div>
+        <!-- Sélection zone -->
+        <div class="bg-white border border-[#d3c5ac] rounded-lg p-4 flex-1">
+          <h4 class="text-xs font-bold uppercase tracking-wider mb-3 text-[#4f4633]">Zone sélectionnée</h4>
+          <div id="zone-info" class="text-xs text-[#4f4633]">
+            <div class="flex flex-col items-center justify-center py-6 gap-3 text-center opacity-60">
+              <span class="material-symbols-outlined text-4xl">touch_app</span>
+              <p class="font-semibold">Cliquez sur un bâtiment</p>
+              <p class="text-[11px] leading-relaxed">Les <strong>grands marqueurs</strong> (lettre = DPE) affichent la fiche complète : surface, consommation, OPERAT, statut Décret Tertiaire.</p>
+            </div>
+          </div>
+        </div>
+        <!-- DPE local quick -->
+        <div class="bg-white border border-[#d3c5ac] rounded-lg p-4">
+          <h4 class="text-xs font-bold uppercase tracking-wider mb-3 text-[#4f4633]">DPE Commune (ADEME)</h4>
+          <div class="space-y-1 text-xs">
+            <div class="flex justify-between items-center">
+              <span>Classe A-B</span>
+              <div class="flex items-center gap-2">
+                <div class="h-2 bg-[#009a44] rounded" style="width:28px"></div>
+                <span class="font-mono font-semibold">8%</span>
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span>Classe C</span>
+              <div class="flex items-center gap-2">
+                <div class="h-2 bg-[#c6d500] rounded" style="width:52px"></div>
+                <span class="font-mono font-semibold">17%</span>
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span>Classe D</span>
+              <div class="flex items-center gap-2">
+                <div class="h-2 bg-[#ffc61a] rounded" style="width:90px"></div>
+                <span class="font-mono font-semibold">29%</span>
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span>Classe E</span>
+              <div class="flex items-center gap-2">
+                <div class="h-2 bg-[#f5820d] rounded" style="width:70px"></div>
+                <span class="font-mono font-semibold">22%</span>
+              </div>
+            </div>
+            <div class="flex justify-between items-center">
+              <span>Classe F-G</span>
+              <div class="flex items-center gap-2">
+                <div class="h-2 bg-[#c21807] rounded" style="width:75px"></div>
+                <span class="font-mono font-semibold">24%</span>
+              </div>
+            </div>
+          </div>
+          <p class="text-[10px] text-[#4f4633] mt-2 opacity-70">Source : Base DPE ADEME 2024</p>
+        </div>
+      </div>
+    </div>
+  </div><!-- end carte -->
+
+  <!-- ════════════ PANEL: DÉCRET TERTIAIRE ════════════ -->
+  <div id="panel-decret" class="section-panel p-4 max-w-[1400px] mx-auto">
+    <div class="mb-6">
+      <h2 class="text-xl font-bold">Décret Tertiaire — Bâtiments Communaux</h2>
+      <p class="text-xs text-[#4f4633] mt-1">Dispositif Éco Énergie Tertiaire (DEET) · Objectifs de réduction ADEME/OPERAT · Bâtiments ≥ 1 000 m²</p>
+    </div>
+
+    <!-- Info banner -->
+    <div class="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6 flex items-start gap-4">
+      <span class="text-2xl">⚖️</span>
+      <div>
+        <p class="text-sm font-bold text-amber-900">Décret n° 2019-771 du 23 juillet 2019 (Loi ELAN)</p>
+        <p class="text-xs text-amber-800 mt-1">Les bâtiments tertiaires de plus de <strong>1 000 m²</strong> doivent réduire leur consommation d'énergie finale de <strong>40% en 2030</strong>, 50% en 2040 et 60% en 2050 par rapport à une année de référence. Les données doivent être déclarées sur la plateforme <strong>OPERAT</strong> (ADEME).</p>
+      </div>
+    </div>
+
+    <!-- Stats row -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white border border-[#d3c5ac] p-4 rounded-lg text-center">
+        <p class="text-3xl font-black text-[#795900]">12</p>
+        <p class="text-xs text-[#4f4633] mt-1">Bâtiments concernés</p>
+      </div>
+      <div class="bg-white border border-[#d3c5ac] p-4 rounded-lg text-center">
+        <p class="text-3xl font-black text-emerald-600">7</p>
+        <p class="text-xs text-[#4f4633] mt-1">En conformité</p>
+      </div>
+      <div class="bg-white border border-[#d3c5ac] p-4 rounded-lg text-center">
+        <p class="text-3xl font-black text-amber-500">4</p>
+        <p class="text-xs text-[#4f4633] mt-1">Actions requises</p>
+      </div>
+      <div class="bg-white border border-[#d3c5ac] p-4 rounded-lg text-center">
+        <p class="text-3xl font-black text-rose-600">1</p>
+        <p class="text-xs text-[#4f4633] mt-1">Non déclaré</p>
+      </div>
+    </div>
+
+    <!-- Table bâtiments -->
+    <div class="bg-white border border-[#d3c5ac] rounded-lg overflow-hidden shadow-sm">
+      <div class="p-3 bg-[#e5eeff] border-b border-[#d3c5ac] flex justify-between items-center">
+        <h3 class="text-xs font-bold uppercase tracking-wider">Bâtiments — DPE, Surface, Puissance & Conformité Décret</h3>
+        <span class="text-[11px] text-[#4f4633]">Sources : ADEME Base DPE + OPERAT + données municipales</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left zebra-table border-collapse text-xs">
+          <thead class="bg-[#eff4ff] border-b border-[#d3c5ac]">
+            <tr>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Bâtiment</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Usage</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Surface (m²)</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">DPE</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Conso réf. (kWhEF/m²/an)</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Conso 2024</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Réduction vs réf.</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Objectif 2030</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Puiss. installée</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Décret</th>
+            </tr>
+          </thead>
+          <tbody id="decret-tbody">
+            <!-- Filled by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Graphique objectifs -->
+    <div class="mt-6 bg-white border border-[#d3c5ac] rounded-lg p-4">
+      <h3 class="text-sm font-semibold mb-1">Trajectoire de réduction énergétique — Bâtiments tertiaires municipaux</h3>
+      <p class="text-xs text-[#4f4633] mb-4">Comparatif consommation réelle vs objectifs ADEME 2030/2040/2050 (kWh EF/m²/an moyen)</p>
+      <canvas id="decretChart" height="80"></canvas>
+    </div>
+  </div><!-- end decret -->
+
+  <!-- ════════════ PANEL: ADEME ════════════ -->
+  <div id="panel-ademe" class="section-panel p-4 max-w-[1400px] mx-auto">
+    <div class="mb-6">
+      <h2 class="text-xl font-bold">Données ADEME — Tremblay-en-France (93290)</h2>
+      <p class="text-xs text-[#4f4633] mt-1">Bilan énergétique communal · Île-de-France · Millésime 2023</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      <!-- Mix énergétique -->
+      <div class="bg-white border border-[#d3c5ac] rounded-lg p-4">
+        <h3 class="text-sm font-semibold mb-1">Mix énergétique local</h3>
+        <p class="text-xs text-[#4f4633] mb-4">Répartition de la consommation finale par vecteur · Source SDES/ADEME</p>
+        <canvas id="mixChart" height="180"></canvas>
+      </div>
+      <!-- DPE distribution -->
+      <div class="bg-white border border-[#d3c5ac] rounded-lg p-4">
+        <h3 class="text-sm font-semibold mb-1">Distribution DPE — Parc résidentiel</h3>
+        <p class="text-xs text-[#4f4633] mb-4">Nombre de logements par classe énergétique · Base ADEME 2024</p>
+        <canvas id="dpeChart" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- Indicateurs ADEME clés -->
+    <div class="bg-white border border-[#d3c5ac] rounded-lg overflow-hidden">
+      <div class="p-3 bg-[#e5eeff] border-b border-[#d3c5ac]">
+        <h3 class="text-xs font-bold uppercase tracking-wider">Indicateurs clés — Comparatif national ADEME</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs text-left zebra-table border-collapse">
+          <thead class="bg-[#eff4ff] border-b border-[#d3c5ac]">
+            <tr>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Indicateur</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Tremblay-en-France</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Moyenne Île-de-France</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Moyenne nationale</th>
+              <th class="p-3 font-semibold uppercase tracking-wider text-[#4f4633]">Écart national</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="hover:bg-[#fff8e1]">
+              <td class="p-3 font-medium">Conso élec. résid. (kWh/hab/an)</td>
+              <td class="p-3 font-mono font-bold">4 820</td>
+              <td class="p-3 font-mono">4 950</td>
+              <td class="p-3 font-mono">5 100</td>
+              <td class="p-3 text-emerald-600 font-bold">-5.5% ✓</td>
+            </tr>
+            <tr class="hover:bg-[#fff8e1]">
+              <td class="p-3 font-medium">DPE moyen parc résidentiel</td>
+              <td class="p-3 font-mono font-bold">D (228 kWh/m²)</td>
+              <td class="p-3 font-mono">D (215 kWh/m²)</td>
+              <td class="p-3 font-mono">E (250 kWh/m²)</td>
+              <td class="p-3 text-amber-600 font-bold">+6% vs IDF</td>
+            </tr>
+            <tr class="hover:bg-[#fff8e1]">
+              <td class="p-3 font-medium">Part logements F-G ("passoires")</td>
+              <td class="p-3 font-mono font-bold">24%</td>
+              <td class="p-3 font-mono">19%</td>
+              <td class="p-3 font-mono">17%</td>
+              <td class="p-3 text-rose-600 font-bold">+7 pts ✗</td>
+            </tr>
+            <tr class="hover:bg-[#fff8e1]">
+              <td class="p-3 font-medium">Émissions CO₂ énergie (tCO₂eq/hab)</td>
+              <td class="p-3 font-mono font-bold">1.8</td>
+              <td class="p-3 font-mono">1.6</td>
+              <td class="p-3 font-mono">2.1</td>
+              <td class="p-3 text-emerald-600 font-bold">-14% ✓</td>
+            </tr>
+            <tr class="hover:bg-[#fff8e1]">
+              <td class="p-3 font-medium">Taux énergie renouvelable locale (%)</td>
+              <td class="p-3 font-mono font-bold">12%</td>
+              <td class="p-3 font-mono">8%</td>
+              <td class="p-3 font-mono">26%</td>
+              <td class="p-3 text-amber-600 font-bold">-14 pts</td>
+            </tr>
+            <tr class="hover:bg-[#fff8e1]">
+              <td class="p-3 font-medium">Précarité énergétique (ménages)</td>
+              <td class="p-3 font-mono font-bold">14.2%</td>
+              <td class="p-3 font-mono">11.8%</td>
+              <td class="p-3 font-mono">12.0%</td>
+              <td class="p-3 text-rose-600 font-bold">+2.2 pts ✗</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-[10px] text-[#4f4633] p-3 opacity-70">Sources : ADEME Open Data, SDES Bilan de l'énergie 2023, Base DPE ADEME, INSEE RP 2020 · Commune 93073</p>
+    </div>
+  </div><!-- end ademe -->
+
+  <!-- ════════════ PANEL: ANALYTICS ════════════ -->
+  <div id="panel-analytics" class="section-panel p-4 max-w-[1400px] mx-auto">
+    <div class="mb-6">
+      <h2 class="text-xl font-bold">Analytique Avancée</h2>
+      <p class="text-xs text-[#4f4633]">Tendances & projections énergétiques — Tremblay-en-France</p>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-white border border-[#d3c5ac] rounded-lg p-4">
+        <h3 class="text-sm font-semibold mb-1">Consommation mensuelle 2024</h3>
+        <p class="text-xs text-[#4f4633] mb-4">Électricité + Gaz + Eau par mois</p>
+        <canvas id="analyticsChart1" height="160"></canvas>
+      </div>
+      <div class="bg-white border border-[#d3c5ac] rounded-lg p-4">
+        <h3 class="text-sm font-semibold mb-1">Répartition par usage final</h3>
+        <p class="text-xs text-[#4f4633] mb-4">Chaleur, éclairage, mobilité, process industriel</p>
+        <canvas id="analyticsChart2" height="160"></canvas>
+      </div>
+    </div>
+  </div><!-- end analytics -->
+
+</main>
+
+<!-- FAB -->
+<button class="fixed bottom-8 right-8 bg-[#fbbf24] text-[#795900] p-4 rounded-full shadow-lg hover:shadow-xl transition-all flex items-center gap-2 group border border-[#795900]/20 z-50">
+  <span class="material-symbols-outlined">add</span>
+  <span class="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap text-xs font-bold uppercase">Nouveau Rapport</span>
+</button>
+
+<script>
+// ═══ DATA ═══
+const batiments = [
+  { nom: "Hôtel de Ville", usage: "Bureaux", surface: 3200, dpe: "D", consoRef: 235, conso2024: 185, puissance: "120 kW", operat: true },
+  { nom: "Médiathèque Nelson Mandela", usage: "ERP", surface: 2800, dpe: "C", consoRef: 195, conso2024: 148, puissance: "95 kW", operat: true },
+  { nom: "Gymnase J. Bouin", usage: "ERP/Sport", surface: 4500, dpe: "E", consoRef: 310, conso2024: 275, puissance: "210 kW", operat: false },
+  { nom: "Groupe Scolaire P. Curie", usage: "Enseignement", surface: 3800, dpe: "D", consoRef: 260, conso2024: 198, puissance: "145 kW", operat: true },
+  { nom: "Centre Technique Municipal", usage: "Industriel/Tertiaire", surface: 5200, dpe: "F", consoRef: 380, conso2024: 345, puissance: "280 kW", operat: true },
+  { nom: "Espace Jeunes — Bd de l'Europe", usage: "ERP", surface: 1200, dpe: "E", consoRef: 290, conso2024: 258, puissance: "60 kW", operat: true },
+  { nom: "EHPAD Les Pins", usage: "Santé", surface: 6800, dpe: "C", consoRef: 210, conso2024: 165, puissance: "320 kW", operat: true },
+  { nom: "Piscine Intercommunale", usage: "ERP/Sport", surface: 5500, dpe: "F", consoRef: 490, conso2024: 465, puissance: "380 kW", operat: false },
+  { nom: "Annexe Administrative Nord", usage: "Bureaux", surface: 1800, dpe: "G", consoRef: 420, conso2024: 405, puissance: "85 kW", operat: false },
+  { nom: "Centre de Loisirs Vieux-Pays", usage: "ERP", surface: 1500, dpe: "D", consoRef: 245, conso2024: 190, puissance: "70 kW", operat: true },
+  { nom: "Marché Couvert", usage: "Commerce", surface: 2100, dpe: "E", consoRef: 320, conso2024: 288, puissance: "95 kW", operat: true },
+  { nom: "Résidence Porte de Paris", usage: "Logement social", surface: 12500, dpe: "D", consoRef: 230, conso2024: 195, puissance: "550 kW", operat: false },
+];
+
+function getDecretStatus(b) {
+  const red = ((b.consoRef - b.conso2024) / b.consoRef) * 100;
+  const obj2030 = 40;
+  if (!b.operat) return { label: "Non déclaré", cls: "bg-red-100 text-red-700 border border-red-300", emoji: "❌" };
+  if (red >= obj2030) return { label: "Conforme 2030", cls: "bg-emerald-100 text-emerald-700 border border-emerald-300", emoji: "✅" };
+  if (red >= 20) return { label: "En cours", cls: "bg-amber-100 text-amber-700 border border-amber-300", emoji: "⚠️" };
+  return { label: "Action requise", cls: "bg-red-100 text-red-700 border border-red-300", emoji: "🚨" };
+}
+
+function dpeBadge(cls) {
+  return `<span class="dpe-${cls} text-[11px] font-black px-2 py-0.5 rounded" style="font-variant-numeric:tabular-nums">${cls}</span>`;
+}
+
+// Fill decret table
+window.addEventListener('DOMContentLoaded', () => {
+  const tbody = document.getElementById('decret-tbody');
+  batiments.forEach(b => {
+    const red = ((b.consoRef - b.conso2024) / b.consoRef * 100).toFixed(1);
+    const obj2030 = (b.consoRef * 0.6).toFixed(0);
+    const st = getDecretStatus(b);
+    const trendCls = parseFloat(red) >= 40 ? 'text-emerald-600' : parseFloat(red) >= 20 ? 'text-amber-600' : 'text-rose-600';
+    tbody.innerHTML += `<tr class="hover:bg-[#fff8e1] transition-colors">
+      <td class="p-3 font-medium">${b.nom}</td>
+      <td class="p-3">${b.usage}</td>
+      <td class="p-3 font-mono font-semibold">${b.surface.toLocaleString('fr-FR')}</td>
+      <td class="p-3">${dpeBadge(b.dpe)}</td>
+      <td class="p-3 font-mono">${b.consoRef}</td>
+      <td class="p-3 font-mono font-semibold">${b.conso2024}</td>
+      <td class="p-3 font-mono font-bold ${trendCls}">${red >= 0 ? '-' : '+'}${Math.abs(red)}%</td>
+      <td class="p-3 font-mono text-[#4f4633]">≤ ${obj2030}</td>
+      <td class="p-3 font-mono">${b.puissance}</td>
+      <td class="p-3"><span class="text-[11px] font-semibold px-2 py-0.5 rounded ${st.cls}">${st.emoji} ${st.label}</span></td>
+    </tr>`;
+  });
+
+  initCharts();
+  initMap();
+});
+
+// ═══ NAVIGATION ═══
+function showPanel(id) {
+  document.querySelectorAll('.section-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+  const map = { overview: 0, carte: 1, decret: 2, ademe: 3, analytics: 4 };
+  const links = document.querySelectorAll('.nav-link');
+  if (links[map[id]]) links[map[id]].classList.add('active');
+  if (id === 'carte') setTimeout(() => { if (window._map) window._map.invalidateSize(); }, 200);
+}
+
+
+
+function toggleChart(type) {
+  document.getElementById('btn-reel').className = type === 'reel' ? 'px-3 py-1.5 bg-white shadow-sm rounded text-xs font-medium' : 'px-3 py-1.5 text-xs text-[#4f4633]';
+  document.getElementById('btn-prev').className = type === 'prev' ? 'px-3 py-1.5 bg-white shadow-sm rounded text-xs font-medium' : 'px-3 py-1.5 text-xs text-[#4f4633]';
+}
+
+// ═══ MAP ═══
+function initMap() {
+  const map = L.map('map', { center: [48.973, 2.555], zoom: 14 });
+  window._map = map;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors',
+    maxZoom: 18,
+  }).addTo(map);
+
+  // Bâtiments publics avec données complètes liées à `batiments`
+  const marqueursBatiments = [
+    { bat: "Hôtel de Ville",              lat: 48.9745, lng: 2.5488 },
+    { bat: "Médiathèque Nelson Mandela",  lat: 48.9730, lng: 2.5530 },
+    { bat: "Gymnase J. Bouin",            lat: 48.9760, lng: 2.5620 },
+    { bat: "Groupe Scolaire P. Curie",    lat: 48.9695, lng: 2.5455 },
+    { bat: "Centre Technique Municipal",  lat: 48.9805, lng: 2.5580 },
+    { bat: "Espace Jeunes — Bd de l'Europe", lat: 48.9715, lng: 2.5500 },
+    { bat: "EHPAD Les Pins",              lat: 48.9785, lng: 2.5445 },
+    { bat: "Piscine Intercommunale",      lat: 48.9710, lng: 2.5640 },
+    { bat: "Annexe Administrative Nord",  lat: 48.9860, lng: 2.5510 },
+    { bat: "Centre de Loisirs Vieux-Pays",lat: 48.9665, lng: 2.5395 },
+    { bat: "Marché Couvert",              lat: 48.9750, lng: 2.5510 },
+    { bat: "Résidence Porte de Paris",    lat: 48.9680, lng: 2.5570 },
+  ];
+
+  // Zones sectorielles (non-bâtiment)
+  const zonesGenerales = [
+    { name: "Zone Industrielle Nord", lat: 48.9870, lng: 2.5490, color: '#dc2626', type: "Industriel", conso: "348 MWh/mois", statut: "Critique" },
+    { name: "Quartier Vieux-Pays",    lat: 48.9670, lng: 2.5380, color: '#10b981', type: "Résidentiel", conso: "92 MWh/mois",  statut: "Normal"   },
+    { name: "Aéroport CDG (périm.)",  lat: 48.9910, lng: 2.5760, color: '#f59e0b', type: "Logistique", conso: "512 MWh/mois", statut: "Veille"   },
+    { name: "Les Cottages",           lat: 48.9615, lng: 2.5580, color: '#10b981', type: "Résidentiel", conso: "78 MWh/mois",  statut: "Normal"   },
+    { name: "Parc des Expositions",   lat: 48.9685, lng: 2.5710, color: '#f59e0b', type: "Tertiaire",  conso: "220 MWh/mois", statut: "Veille"   },
+    { name: "Toiture Solaire CTM",    lat: 48.9800, lng: 2.5595, color: '#f9bd22', type: "Production EnR", conso: "18 kWc installés", statut: "Actif" },
+  ];
+
+  function dpeColor(dpe) {
+    return { A:'#009a44', B:'#4cbb6f', C:'#c6d500', D:'#ffc61a', E:'#f5820d', F:'#e9450a', G:'#c21807' }[dpe] || '#888';
+  }
+
+  function showFicheBatiment(b) {
+    const red = ((b.consoRef - b.conso2024) / b.consoRef * 100).toFixed(1);
+    const obj2030 = (b.consoRef * 0.6).toFixed(0);
+    const st = getDecretStatus(b);
+    const decretOblige = b.surface >= 1000;
+    const redNum = parseFloat(red);
+    const barWidth = Math.min(redNum / 60 * 100, 100);
+    const barColor = redNum >= 40 ? '#10b981' : redNum >= 20 ? '#f59e0b' : '#dc2626';
+
+    document.getElementById('zone-info').innerHTML = `
+      <div class="space-y-3">
+        <!-- En-tête -->
+        <div class="pb-2 border-b border-[#d3c5ac]">
+          <p class="font-bold text-[#0b1c30] text-sm leading-tight">${b.nom}</p>
+          <p class="text-[11px] text-[#4f4633] mt-0.5">${b.usage}</p>
+        </div>
+
+        <!-- DPE -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-[#4f4633]">DPE</span>
+          <span class="dpe-${b.dpe} text-sm font-black px-3 py-0.5 rounded">${b.dpe}</span>
+        </div>
+
+        <!-- Surface -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-[#4f4633]">Surface</span>
+          <span class="font-mono font-bold text-sm">${b.surface.toLocaleString('fr-FR')} m²</span>
+        </div>
+
+        <!-- Puissance -->
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-[#4f4633]">Puissance installée</span>
+          <span class="font-mono font-bold text-sm">${b.puissance}</span>
+        </div>
+
+        <!-- Conso -->
+        <div class="bg-[#f8f9ff] rounded p-2 space-y-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-[#4f4633]">Conso référence</span>
+            <span class="font-mono font-semibold">${b.consoRef} kWh EF/m²/an</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span class="text-[#4f4633]">Conso 2024</span>
+            <span class="font-mono font-bold">${b.conso2024} kWh EF/m²/an</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span class="text-[#4f4633]">Objectif 2030</span>
+            <span class="font-mono text-emerald-700 font-bold">≤ ${obj2030} kWh EF/m²/an</span>
+          </div>
+        </div>
+
+        <!-- Barre progression -->
+        <div>
+          <div class="flex justify-between text-[11px] mb-1">
+            <span class="text-[#4f4633] font-semibold">Réduction réalisée</span>
+            <span class="font-mono font-bold" style="color:${barColor}">${red}% / 40% objectif 2030</span>
+          </div>
+          <div class="w-full bg-[#e5eeff] rounded-full h-2">
+            <div class="h-2 rounded-full transition-all" style="width:${barWidth}%;background:${barColor}"></div>
+          </div>
+        </div>
+
+        <!-- Décret tertiaire -->
+        <div class="rounded p-2 ${decretOblige ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50 border border-slate-200'}">
+          <p class="text-[11px] font-bold ${decretOblige ? 'text-amber-900' : 'text-slate-500'}">
+            ${decretOblige ? '⚖️ Soumis au Décret Tertiaire' : '🔵 Non soumis (< 1 000 m²)'}
+          </p>
+          ${decretOblige ? `<p class="text-[10px] mt-0.5 text-amber-800">Bâtiment ≥ 1 000 m² — obligation de déclaration OPERAT</p>` : ''}
+        </div>
+
+        <!-- OPERAT -->
+        <div class="flex items-center justify-between rounded p-2 ${b.operat ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}">
+          <span class="text-[11px] font-bold ${b.operat ? 'text-emerald-800' : 'text-red-700'}">
+            ${b.operat ? '✅ Déclaré sur OPERAT' : '❌ Non déclaré sur OPERAT'}
+          </span>
+          ${!b.operat && decretOblige ? '<span class="text-[10px] text-red-600 font-semibold">Action requise !</span>' : ''}
+        </div>
+
+        <!-- Statut décret -->
+        <div class="pt-1">
+          <span class="text-[11px] font-semibold px-2 py-1 rounded ${st.cls}">${st.emoji} ${st.label}</span>
+        </div>
+      </div>`;
+  }
+
+  function showFicheZone(z) {
+    const statutColor = z.statut === 'Critique' ? 'text-red-600' : z.statut === 'Veille' ? 'text-amber-600' : 'text-emerald-600';
+    document.getElementById('zone-info').innerHTML = `
+      <div class="space-y-3">
+        <div class="pb-2 border-b border-[#d3c5ac]">
+          <p class="font-bold text-[#0b1c30] text-sm">${z.name}</p>
+          <p class="text-[11px] text-[#4f4633]">${z.type}</p>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-[#4f4633] font-semibold">Consommation</span>
+          <span class="font-mono font-bold">${z.conso}</span>
+        </div>
+        <div class="flex justify-between text-xs">
+          <span class="text-[#4f4633] font-semibold">Statut</span>
+          <span class="font-bold ${statutColor}">${z.statut}</span>
+        </div>
+        <p class="text-[10px] text-[#4f4633] italic mt-2">Cette zone regroupe plusieurs points de consommation. Cliquez sur un bâtiment (🔵) pour la fiche détaillée OPERAT/DPE.</p>
+      </div>`;
+  }
+
+  // Placer les marqueurs bâtiments
+  marqueursBatiments.forEach(mb => {
+    const b = batiments.find(x => x.nom === mb.bat);
+    if (!b) return;
+    const st = getDecretStatus(b);
+    const borderColor = b.operat ? '#10b981' : '#dc2626';
+    const innerColor = dpeColor(b.dpe);
+    const icon = L.divIcon({
+      className: '',
+      html: `<div title="${b.nom}" style="
+        width:22px;height:22px;border-radius:50%;
+        background:${innerColor};
+        border:3px solid ${borderColor};
+        box-shadow:0 2px 8px rgba(0,0,0,.35);
+        display:flex;align-items:center;justify-content:center;
+        color:white;font-size:9px;font-weight:900;font-family:Inter,sans-serif;
+        cursor:pointer;
+      ">${b.dpe}</div>`,
+      iconSize: [22, 22], iconAnchor: [11, 11]
+    });
+    L.marker([mb.lat, mb.lng], { icon }).addTo(map).on('click', () => {
+      map.setView([mb.lat, mb.lng], 16, { animate: true });
+      showFicheBatiment(b);
+    });
+  });
+
+  // Placer les zones générales
+  zonesGenerales.forEach(z => {
+    const icon = L.divIcon({
+      className: '',
+      html: `<div title="${z.name}" style="
+        width:14px;height:14px;border-radius:50%;
+        background:${z.color};border:2px solid white;
+        box-shadow:0 2px 6px rgba(0,0,0,.3);cursor:pointer;
+      "></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7]
+    });
+    L.marker([z.lat, z.lng], { icon }).addTo(map).on('click', () => showFicheZone(z));
+  });
+
+  // Contour communal
+  L.polygon([
+    [48.961, 2.533],[48.994, 2.533],[48.994, 2.582],[48.961, 2.582]
+  ], { color: '#795900', weight: 2, fillOpacity: 0.03, dashArray: '6,4' }).addTo(map);
+}
+
+function resetMap() { if(window._map) { window._map.setView([48.973,2.555],14); } }
+function fitTremblay() { if(window._map) { window._map.fitBounds([[48.961,2.533],[48.994,2.582]]); } }
+
+// ═══ CHARTS ═══
+function initCharts() {
+  const months = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+
+  // Main chart
+  new Chart(document.getElementById('mainChart'), {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'Production (kWh/hab)', data: [280,310,380,420,460,510,490,470,430,370,300,260], borderColor:'#f9bd22', backgroundColor:'rgba(249,189,34,0.08)', tension:.4, fill:true, pointRadius:3 },
+        { label: 'Consommation (kWh/hab)', data: [520,490,470,430,390,380,370,380,410,460,510,540], borderColor:'#0058be', backgroundColor:'rgba(0,88,190,0.06)', tension:.4, fill:true, pointRadius:3 },
+        { label: 'Objectif ADEME 2030', data: [310,310,310,310,310,310,310,310,310,310,310,310], borderColor:'#10b981', borderDash:[6,3], tension:0, pointRadius:0 },
+      ]
+    },
+    options: { responsive:true, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:false, grid:{color:'rgba(0,0,0,.05)'} }, x:{ grid:{display:false} } } }
+  });
+
+  // Decret chart
+  new Chart(document.getElementById('decretChart'), {
+    type: 'bar',
+    data: {
+      labels: ['2019 (réf.)', '2021', '2022', '2023', '2024', 'Obj. 2030', 'Obj. 2040', 'Obj. 2050'],
+      datasets: [
+        { label: 'Conso réelle (kWh EF/m²/an)', data: [295,285,278,270,262,null,null,null], backgroundColor:'rgba(0,88,190,0.7)', borderRadius:4 },
+        { label: 'Objectif réglementaire', data: [null,null,null,null,null,177,148,118], backgroundColor:'rgba(16,185,129,0.7)', borderRadius:4 },
+      ]
+    },
+    options: { responsive:true, plugins:{ legend:{position:'bottom', labels:{font:{size:11}}} }, scales:{ y:{ beginAtZero:false, min:100, grid:{color:'rgba(0,0,0,.05)'} }, x:{ grid:{display:false} } } }
+  });
+
+  // Mix chart
+  new Chart(document.getElementById('mixChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Électricité','Gaz naturel','Fioul domestique','EnR thermiques','Réseaux de chaleur'],
+      datasets: [{ data: [48,28,10,8,6], backgroundColor:['#f9bd22','#9d4300','#64748b','#10b981','#0058be'], borderWidth:2, borderColor:'#fff' }]
+    },
+    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:11} } } } }
+  });
+
+  // DPE chart
+  new Chart(document.getElementById('dpeChart'), {
+    type: 'bar',
+    data: {
+      labels: ['A','B','C','D','E','F','G'],
+      datasets: [{ label: 'Nb logements', data: [120, 350, 1280, 2200, 1680, 1050, 790], backgroundColor:['#009a44','#4cbb6f','#c6d500','#ffc61a','#f5820d','#e9450a','#c21807'], borderRadius:4 }]
+    },
+    options: { responsive:true, plugins:{ legend:{display:false} }, scales:{ y:{ beginAtZero:true, grid:{color:'rgba(0,0,0,.05)'} }, x:{ grid:{display:false} } } }
+  });
+
+  // Analytics charts
+  new Chart(document.getElementById('analyticsChart1'), {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [
+        { label: 'Électricité (MWh)', data: [1380,1290,1240,1180,1050,980,950,970,1080,1220,1350,1420], backgroundColor:'rgba(249,189,34,0.7)', borderRadius:3 },
+        { label: 'Gaz (MWh)', data: [820,750,620,310,120,60,50,55,180,450,720,860], backgroundColor:'rgba(157,67,0,0.7)', borderRadius:3 },
+      ]
+    },
+    options: { responsive:true, plugins:{ legend:{position:'bottom',labels:{font:{size:11}}} }, scales:{ y:{beginAtZero:true,grid:{color:'rgba(0,0,0,.05)'}}, x:{grid:{display:false}} } }
+  });
+
+  new Chart(document.getElementById('analyticsChart2'), {
+    type: 'pie',
+    data: {
+      labels: ['Chauffage / ECS','Éclairage','Process industriel','Climatisation','Transports électriques','Autres'],
+      datasets: [{ data: [38,18,22,10,6,6], backgroundColor:['#9d4300','#f9bd22','#0058be','#0ea5e9','#10b981','#94a3b8'], borderWidth:2, borderColor:'#fff' }]
+    },
+    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{font:{size:11}} } } }
+  });
+}
+</script>
+</body>
+</html>
